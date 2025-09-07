@@ -1,0 +1,84 @@
+//@version=5
+indicator("NY Time Key Levels", overlay=true, max_lines_count=1000)
+
+// Input settings
+days_back = input.int(5, title="Number of Days", minval=1, maxval=10)
+show_midnight = input.bool(true, title="Show 00:00 (Midnight)")
+show_london_open = input.bool(true, title="Show 10:00 (London Session)")
+show_ny_close = input.bool(true, title="Show 18:00 (NY Close)")
+
+// Colors for different time levels
+midnight_color = input.color(color.red, title="Midnight Color")
+london_color = input.color(color.blue, title="10:00 Color")
+ny_close_color = input.color(color.green, title="18:00 Color")
+
+// Line style settings
+line_style = input.string("Solid", title="Line Style", options=["Solid", "Dashed", "Dotted"])
+line_width = input.int(1, title="Line Width", minval=1, maxval=5)
+line_extend = input.string("Right", title="Line Extend", options=["None", "Right", "Left", "Both"])
+
+// Time zone
+ny_timezone = "America/New_York"
+
+// Convert line style
+get_line_style() =>
+    switch line_style
+        "Solid" => line.style_solid
+        "Dashed" => line.style_dashed
+        "Dotted" => line.style_dotted
+        => line.style_solid
+
+// Convert line extend
+get_line_extend() =>
+    switch line_extend
+        "None" => extend.none
+        "Right" => extend.right
+        "Left" => extend.left
+        "Both" => extend.both
+        => extend.right
+
+// Check if we should draw for current time
+should_draw() =>
+    days_diff = math.floor((timenow - time) / (24 * 60 * 60 * 1000))
+    days_diff <= days_back and days_diff >= 0
+
+// Arrays to store levels
+var array<line> midnight_levels = array.new<line>()
+var array<line> london_levels = array.new<line>()
+var array<line> ny_close_levels = array.new<line>()
+
+// Check for specific times in NY timezone
+is_midnight = hour(time, ny_timezone) == 0 and minute(time, ny_timezone) == 0
+is_london_time = hour(time, ny_timezone) == 10 and minute(time, ny_timezone) == 0
+is_ny_close = hour(time, ny_timezone) == 18 and minute(time, ny_timezone) == 0
+
+// Draw horizontal lines at the price level when time matches (CREATE FROM START OF TIME, EXTEND RIGHT)
+if is_midnight and show_midnight and should_draw()
+    new_line = line.new(x1=bar_index, y1=open, x2=bar_index + 1, y2=open, color=midnight_color, style=get_line_style(), width=line_width, extend=get_line_extend())
+    array.push(midnight_levels, new_line)
+    label.new(x=bar_index, y=open, text="00:00 NY", style=label.style_label_left, color=midnight_color, textcolor=color.white, size=size.small)
+
+if is_london_time and show_london_open and should_draw()
+    new_line = line.new(x1=bar_index, y1=open, x2=bar_index + 1, y2=open, color=london_color, style=get_line_style(), width=line_width, extend=get_line_extend())
+    array.push(london_levels, new_line)
+    label.new(x=bar_index, y=open, text="10:00 NY", style=label.style_label_left, color=london_color, textcolor=color.white, size=size.small)
+
+if is_ny_close and show_ny_close and should_draw()
+    new_line = line.new(x1=bar_index, y1=open, x2=bar_index + 1, y2=open, color=ny_close_color, style=get_line_style(), width=line_width, extend=get_line_extend())
+    array.push(ny_close_levels, new_line)
+    label.new(x=bar_index, y=open, text="18:00 NY", style=label.style_label_left, color=ny_close_color, textcolor=color.white, size=size.small)
+
+// Clean up old lines to prevent too many on chart (ALLOW UP TO 100 LEVELS PER SESSION)
+max_levels = 100
+
+if array.size(midnight_levels) > max_levels
+    old_line = array.shift(midnight_levels)
+    line.delete(old_line)
+
+if array.size(london_levels) > max_levels
+    old_line = array.shift(london_levels)
+    line.delete(old_line)
+
+if array.size(ny_close_levels) > max_levels
+    old_line = array.shift(ny_close_levels)
+    line.delete(old_line)
